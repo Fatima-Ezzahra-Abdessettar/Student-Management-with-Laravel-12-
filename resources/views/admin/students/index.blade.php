@@ -34,7 +34,7 @@
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto" x-data="{ deleteUrl: '' }">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -68,11 +68,12 @@
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <a href="{{ route('admin.students.edit', $student->id) }}" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</a>
-                                            <form action="{{ route('admin.students.destroy', $student->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Are you sure you want to delete this student?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                                            </form>
+                                            <button
+                                                x-on:click.prevent="deleteUrl = '{{ route('admin.students.destroy', $student->id) }}'; $dispatch('open-modal', 'delete-student-modal')"
+                                                class="text-red-600 hover:text-red-900"
+                                            >
+                                                Delete
+                                            </button>
                                         </td>
                                     </tr>
                                 @empty
@@ -84,6 +85,31 @@
                                 @endforelse
                             </tbody>
                         </table>
+                        
+                        <x-modal name="delete-student-modal" focusable>
+                            <form method="POST" :action="deleteUrl" class="p-6">
+                                @csrf
+                                @method('DELETE')
+            
+                                <h2 class="text-lg font-medium text-gray-900">
+                                    {{ __('Are you sure you want to delete this student?') }}
+                                </h2>
+            
+                                <p class="mt-1 text-sm text-gray-600">
+                                    {{ __('Once the student is deleted, all of their data will be permanently deleted.') }}
+                                </p>
+            
+                                <div class="mt-6 flex justify-end">
+                                    <x-secondary-button x-on:click="$dispatch('close')">
+                                        {{ __('Cancel') }}
+                                    </x-secondary-button>
+            
+                                    <x-danger-button class="ml-3">
+                                        {{ __('Delete Student') }}
+                                    </x-danger-button>
+                                </div>
+                            </form>
+                        </x-modal>
                     </div>
                     
                     <div class="mt-4">

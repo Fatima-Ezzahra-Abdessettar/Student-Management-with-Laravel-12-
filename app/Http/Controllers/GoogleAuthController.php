@@ -14,16 +14,25 @@ class GoogleAuthController extends Controller
     public function callback(Request $request)
     {
         $request->validate([
-            'uid' => 'required|string',
-            'email' => 'required|email',
-            'displayName' => 'required|string',
-            'photoURL' => 'nullable|string',
+            'idToken' => 'required|string',
         ]);
 
-        $uid = $request->uid;
-        $email = $request->email;
-        $name = $request->displayName;
-        $photo = $request->photoURL;
+        $idTokenString = $request->idToken;
+
+        try {
+            $auth = app('firebase.auth');
+            $verifiedIdToken = $auth->verifyIdToken($idTokenString);
+
+            $uid = $verifiedIdToken->claims()->get('sub');
+            $userRecord = $auth->getUser($uid);
+
+            $email = $userRecord->email;
+            $name = $userRecord->displayName ?? 'User';
+            $photo = $userRecord->photoUrl;
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => 'Invalid Token: ' . $e->getMessage()], 401);
+        }
 
         // 1. Try to find user by google_id
         $user = User::where('google_id', $uid)->first();
@@ -45,11 +54,10 @@ class GoogleAuthController extends Controller
         }
 
         // 3. Create new user and student
-        // Force role 'student'
         $user = User::create([
             'name' => $name,
             'email' => $email,
-            'password' => null, // No password for Google Auth users
+            'password' => null, 
             'role' => 'student',
             'google_id' => $uid,
             'email_verified_at' => now(),
@@ -59,8 +67,7 @@ class GoogleAuthController extends Controller
             'user_id' => $user->id,
             'full_name' => $name,
             'email' => $email,
-            'photo' => null, // Or try to download/link the Google photo if needed, but keeping it simple/local for now. Could set to $photo if field is URL friendly or download it.
-            // Keeping photo null for now as we store paths, not URLs usually, unless we adapt accessor.
+            'photo' => null, 
         ]);
 
         Auth::login($user);

@@ -66,18 +66,19 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
 
         // Your web app's Firebase configuration
         // Load from .env via blade if possible, or expect user to fill this
         const firebaseConfig = {
-            apiKey: "{{ env('VITE_FIREBASE_API_KEY') }}",
-            authDomain: "{{ env('VITE_FIREBASE_AUTH_DOMAIN') }}",
-            projectId: "{{ env('VITE_FIREBASE_PROJECT_ID') }}",
-            storageBucket: "{{ env('VITE_FIREBASE_STORAGE_BUCKET') }}",
-            messagingSenderId: "{{ env('VITE_FIREBASE_MESSAGING_SENDER_ID') }}",
-            appId: "{{ env('VITE_FIREBASE_APP_ID') }}"
+            apiKey: "AIzaSyCHRUmdwQPnGl5BnEbYeB_R_6ILVGvOkT0",
+            authDomain: "gestionetudiantslaravel12.firebaseapp.com",
+            projectId: "gestionetudiantslaravel12",
+            storageBucket: "gestionetudiantslaravel12.firebasestorage.app",
+            messagingSenderId: "956051501494",
+            appId: "1:956051501494:web:1c368ae2a64a5a72725117",
+            measurementId: "G-TYZPCSCTNR"
         };
 
         // Initialize Firebase
@@ -96,31 +97,31 @@
             .then((result) => {
                 const user = result.user;
                 
-                // Send token and user info to backend
-                fetch('{{ route("google.callback") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        uid: user.uid,
-                        email: user.email,
-                        displayName: user.displayName,
-                        photoURL: user.photoURL
+                // Get the ID token
+                user.getIdToken().then((idToken) => {
+                    // Send token to backend
+                    fetch('{{ route("google.callback") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({
+                            idToken: idToken
+                        })
                     })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        window.location.href = data.redirect_url;
-                    } else {
-                        alert('Login failed');
-                    }
-                })
-                .catch((error) => {
-                    console.error('Error:', error);
-                    alert('An error occurred during backend authentication.');
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            window.location.href = data.redirect_url;
+                        } else {
+                            alert('Login failed');
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Error:', error);
+                        alert('An error occurred during backend authentication.');
+                    });
                 });
 
             }).catch((error) => {

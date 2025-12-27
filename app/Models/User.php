@@ -24,7 +24,6 @@ class User extends Authenticatable
         'role',
         'google_id',
     ];
-
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -34,7 +33,6 @@ class User extends Authenticatable
         'password',
         'remember_token',
     ];
-
     /**
      * Get the attributes that should be cast.
      *
@@ -47,7 +45,6 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-
     /**
      * Get the student profile associated with the user.
      */
