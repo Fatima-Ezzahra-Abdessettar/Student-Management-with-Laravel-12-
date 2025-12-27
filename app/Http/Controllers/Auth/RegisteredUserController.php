@@ -39,6 +39,14 @@ class RegisteredUserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => 'student',
+        ]);
+
+        // Create associated student record
+        \App\Models\Student::create([
+            'user_id' => $user->id,
+            'full_name' => $user->name,
+            'email' => $user->email,
         ]);
 
         event(new Registered($user));

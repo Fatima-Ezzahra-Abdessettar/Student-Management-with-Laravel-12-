@@ -20,14 +20,17 @@ class ProfileController extends Controller
         $user = Auth::user();
         $student = $user->student; 
         
-        // Ensure student record exists (if created via seeder might be missing if not careful, but logic handles it)
         if (!$student) {
-             // Fallback or create? Better to fail loud or redirect.
-             // For this app, we assume 1-1 check.
-             abort(404, 'Student profile not found.');
+             // If for some reason the student record is missing, we could create it or show an error.
+             // For now, let's create a stub if it's missing to avoid the 404 during this recovery phase.
+             $student = \App\Models\Student::create([
+                'user_id' => $user->id,
+                'full_name' => $user->name,
+                'email' => $user->email,
+             ]);
         }
 
-        return view('student.profile', compact('vector', 'user', 'student'));
+        return view('student.profile', compact('user', 'student'));
     }
 
     /**
