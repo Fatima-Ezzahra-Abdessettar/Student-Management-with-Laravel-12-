@@ -1,0 +1,63 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                user: laravel
+                uid: 1000
+        image: gestion-etudiants-app
+        container_name: gestion-etudiants-app
+        restart: unless-stopped
+        working_dir: /var/www
+        volumes:
+            - .:/var/www
+        env_file:
+            - .env.docker
+        environment:
+            DB_HOST: db
+            DB_PORT: 3306
+            DB_DATABASE: ${DB_DATABASE:-laravel}
+            DB_USERNAME: root
+            DB_PASSWORD: ${DB_PASSWORD:-root}
+        networks:
+            - laravel
+        depends_on:
+            - db
+        entrypoint: ["bash", "./docker-entrypoint.sh"]
+
+    web:
+        image: nginx:alpine
+        container_name: gestion-etudiants-nginx
+        restart: unless-stopped
+        ports:
+            - "8000:80"
+        volumes:
+            - .:/var/www
+            - ./docker/nginx/conf.d:/etc/nginx/conf.d
+        networks:
+            - laravel
+        depends_on:
+            - app
+
+    db:
+        image: mysql:8.0
+        container_name: gestion-etudiants-db
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:-laravel}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+            SERVICE_TAGS: dev
+            SERVICE_NAME: mysql
+        volumes:
+            - db_data:/var/lib/mysql
+            - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+        networks:
+            - laravel
+
+networks:
+    laravel:
+        driver: bridge
+
+volumes:
+    db_data:
