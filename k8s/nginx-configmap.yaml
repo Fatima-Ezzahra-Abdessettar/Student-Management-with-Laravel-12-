@@ -7,7 +7,6 @@ data:
     server {
       listen 80;
       root /var/www/public;
-
       index index.php;
 
       location / {
@@ -15,8 +14,10 @@ data:
       }
 
       location ~ \.php$ {
-        fastcgi_pass 127.0.0.1:9000;
-        include fastcgi_params;
+        # Fixed: Connect to php container on port 9000
+        fastcgi_pass localhost:9000;
+        fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
       }
     }
