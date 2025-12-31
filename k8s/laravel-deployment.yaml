@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-deployment
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: laravel
+  template:
+    metadata:
+      labels:
+        app: laravel
+    spec:
+      containers:
+
+      - name: php
+        image: gestion-etudiants-app:v2
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9000
+        env:
+        - name: DB_HOST
+          value: mysql-service
+        - name: DB_DATABASE
+          value: laravel_db
+        - name: DB_USERNAME
+          value: root
+        - name: DB_PASSWORD
+          value: root
+        - name: APP_KEY
+          value: "base64:ek2BDn5BzTUlkwJTLaWZyVtyvo7+uXSnfwRAqvEk5rc="
+
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
