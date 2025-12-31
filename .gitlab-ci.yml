@@ -1,0 +1,274 @@
+
+stages:
+  - build
+  - lint
+  - test
+  - deploy-staging
+  - deploy-production
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  MYSQL_ROOT_PASSWORD: root_password
+  MYSQL_DATABASE: laravel_test
+  MYSQL_USER: laravel
+  MYSQL_PASSWORD: laravel_password
+  DB_HOST: mysql
+  APP_ENV: testing
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - vendor/
+    - node_modules/
+    - .npm/
+    - .composer/
+
+.php-base:
+  image: php:8.4-fpm
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git curl libpng-dev libonig-dev libxml2-dev zip unzip
+    - docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - composer install --prefer-dist --no-ansi --no-interaction --no-progress --optimize-autoloader
+
+build:dependencies:
+  stage: build
+  extends: .php-base
+  script:
+    - echo "Installation des dépendances PHP..."
+    - composer install --no-dev --optimize-autoloader
+    - echo "Installation des dépendances Node.js..."
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    - apt-get install -y nodejs
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+  artifacts:
+    paths:
+      - vendor/
+      - node_modules/
+      - public/build/
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+    - merge_requests
+
+lint:php-cs-fixer:
+  stage: lint
+  extends: .php-base
+  script:
+    - echo "Vérification du style de code PHP..."
+    - composer require --dev friendsofphp/php-cs-fixer
+    - vendor/bin/php-cs-fixer fix --dry-run --diff --verbose
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+lint:phpstan:
+  stage: lint
+  extends: .php-base
+  script:
+    - echo "Analyse statique avec PHPStan..."
+    - composer require --dev phpstan/phpstan
+    - vendor/bin/phpstan analyse --memory-limit=2G
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+lint:eslint:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - echo "Vérification du code JavaScript..."
+    - npm ci --cache .npm --prefer-offline
+    - npm run lint || echo "ESLint not configured"
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+test:unit:
+  stage: test
+  extends: .php-base
+  services:
+    - mysql:8.0
+  script:
+    - echo "Préparation de l'environnement de test..."
+    - cp .env.example .env
+    - php artisan key:generate
+    - php artisan config:clear
+    - echo "Exécution des tests unitaires..."
+    - php artisan test --parallel --coverage --min=80
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
+  artifacts:
+    reports:
+      junit: storage/logs/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - storage/logs/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+    - merge_requests
+
+test:feature:
+  stage: test
+  extends: .php-base
+  services:
+    - mysql:8.0
+  script:
+    - echo "Exécution des tests de fonctionnalité..."
+    - cp .env.example .env
+    - php artisan key:generate
+    - php artisan migrate --force
+    - php artisan db:seed --force
+    - php artisan test --testsuite=Feature
+  only:
+    - main
+    - develop
+    - merge_requests
+
+security:check:
+  stage: test
+  extends: .php-base
+  script:
+    - echo "Vérification des vulnérabilités de sécurité..."
+    - composer audit
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
+
+build:docker:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Construction de l'image Docker..."
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - main
+    - develop
+
+deploy:staging:
+  stage: deploy-staging
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $STAGING_SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - echo "Déploiement sur le serveur de staging..."
+    - ssh $STAGING_USER@$STAGING_SERVER_IP "
+        cd $STAGING_PATH &&
+        git pull origin develop &&
+        docker-compose pull &&
+        docker-compose up -d &&
+        docker-compose exec -T app php artisan migrate --force &&
+        docker-compose exec -T app php artisan config:cache &&
+        docker-compose exec -T app php artisan route:cache &&
+        docker-compose exec -T app php artisan view:cache
+      "
+  environment:
+    name: staging
+    url: https://staging.votre-domaine.com
+  only:
+    - develop
+  when: manual
+
+deploy:production:
+  stage: deploy-production
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $PRODUCTION_SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - echo "Déploiement sur le serveur de production..."
+    - ssh $PRODUCTION_USER@$PRODUCTION_SERVER_IP "
+        cd $PRODUCTION_PATH &&
+        git pull origin main &&
+        docker-compose pull &&
+        docker-compose up -d &&
+        docker-compose exec -T app php artisan down &&
+        docker-compose exec -T app php artisan migrate --force &&
+        docker-compose exec -T app php artisan config:cache &&
+        docker-compose exec -T app php artisan route:cache &&
+        docker-compose exec -T app php artisan view:cache &&
+        docker-compose exec -T app php artisan queue:restart &&
+        docker-compose exec -T app php artisan up
+      "
+  environment:
+    name: production
+    url: https://votre-domaine.com
+  only:
+    - main
+  when: manual
+
+notify:success:
+  stage: .post
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST $SLACK_WEBHOOK_URL \
+      -H 'Content-Type: application/json' \
+      -d "{
+        \"text\": \"✅ Pipeline réussi pour $CI_PROJECT_NAME\",
+        \"attachments\": [{
+          \"color\": \"good\",
+          \"fields\": [
+            {\"title\": \"Branch\", \"value\": \"$CI_COMMIT_REF_NAME\", \"short\": true},
+            {\"title\": \"Commit\", \"value\": \"$CI_COMMIT_SHORT_SHA\", \"short\": true},
+            {\"title\": \"Auteur\", \"value\": \"$GITLAB_USER_NAME\", \"short\": true}
+          ]
+        }]
+      }"
+  when: on_success
+  only:
+    - main
+    - develop
+
+notify:failure:
+  stage: .post
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST $SLACK_WEBHOOK_URL \
+      -H 'Content-Type: application/json' \
+      -d "{
+        \"text\": \"❌ Pipeline échoué pour $CI_PROJECT_NAME\",
+        \"attachments\": [{
+          \"color\": \"danger\",
+          \"fields\": [
+            {\"title\": \"Branch\", \"value\": \"$CI_COMMIT_REF_NAME\", \"short\": true},
+            {\"title\": \"Commit\", \"value\": \"$CI_COMMIT_SHORT_SHA\", \"short\": true},
+            {\"title\": \"Auteur\", \"value\": \"$GITLAB_USER_NAME\", \"short\": true}
+          ]
+        }]
+      }"
+  when: on_failure
+  only:
+    - main
+    - develop
