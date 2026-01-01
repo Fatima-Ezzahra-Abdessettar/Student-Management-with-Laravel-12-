@@ -18,6 +18,6 @@ spec:
         - name: MYSQL_ROOT_PASSWORD
           value: root
         - name: MYSQL_DATABASE
-          value: laravel_db
+          value: students
         ports:
         - containerPort: 3306

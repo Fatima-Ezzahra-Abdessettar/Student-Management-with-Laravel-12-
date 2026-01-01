@@ -4,7 +4,7 @@ metadata:
   name: laravel-ingress
 spec:
   rules:
-  - host: laravel.local
+  - host: students.local
     http:
       paths:
       - path: /

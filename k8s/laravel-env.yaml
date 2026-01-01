@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: laravel-env
+data:
+  .env: |
+    APP_ENV=local
+    APP_DEBUG=true
+    APP_KEY=base64:0dwyKtmdOMpDWM7oFG4chvLTbBNEIJCx6HIUTEXJ8Ns=
+    APP_URL=http://students.local
+
+    DB_CONNECTION=mysql
+    DB_HOST=mysql-service
+    DB_PORT=3306
+    DB_DATABASE=students
+    DB_USERNAME=root
+    DB_PASSWORD=root
