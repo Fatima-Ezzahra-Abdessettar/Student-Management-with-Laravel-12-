@@ -19,12 +19,6 @@ try {
   sleep 2
 done
 
-# Generate app key if not set
-if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:placeholder" ]; then
-    echo "Generating APP_KEY..."
-    php artisan key:generate --force
-fi
-
 # Run migrations
 echo "Running migrations..."
 php artisan migrate --force

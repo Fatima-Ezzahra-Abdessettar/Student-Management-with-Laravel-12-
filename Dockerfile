@@ -31,8 +31,24 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Working directory
 WORKDIR /var/www
 
-# Copy app
+# Copy composer files first (for better layer caching)
+COPY composer.json composer.lock ./
+
+# Install composer dependencies
+RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interaction
+
+# Copy package files (for better layer caching)
+COPY package*.json ./
+
+# Install npm dependencies
+RUN npm config set registry https://registry.npmmirror.com && \
+       npm install
+
+# Copy rest of the app
 COPY . /var/www
+
+# Build frontend assets
+RUN npm run build
 
 # Entrypoint
 RUN chmod +x docker-entrypoint.sh
